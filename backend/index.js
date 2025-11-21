@@ -26,9 +26,9 @@ async function startServer() {
         const subClient = pubClient.duplicate();
         await Promise.all([pubClient.connect(), subClient.connect()]);
         adapter = createAdapter(pubClient, subClient);
-        console.log("✅ Conectado a Redis (Upstash)");
+        console.log("Conectado a Redis (Upstash)");
       } catch (error) {
-        console.log("⚠️ Sin Redis, usando memoria local.");
+        console.log("Sin Redis, usando memoria local.");
       }
   }
 
@@ -39,7 +39,7 @@ async function startServer() {
   });
 
   io.on('connection', (socket) => {
-    console.log('⚡ Cliente conectado:', socket.id);
+    console.log('Cliente conectado:', socket.id);
 
     // A) Enviar Historial (Usando tabla 'Mensaje')
     socket.on('pedir_historial', async () => {
@@ -73,7 +73,7 @@ async function startServer() {
 
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, () => {
-    console.log(`🚀 Servidor listo en puerto ${PORT}`);
+    console.log(`Servidor listo en puerto ${PORT}`);
   });
 }
 
