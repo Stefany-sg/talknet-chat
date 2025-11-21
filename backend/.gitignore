@@ -1,0 +1,21 @@
+# --- Dependencias ---
+node_modules/
+npm-debug.log
+
+# --- Variables de Entorno (SECRETOS) ---
+.env
+.env.local
+.env.*.local
+
+# --- Archivos del Sistema ---
+.DS_Store
+Thumbs.db
+dist/
+
+# --- Logs y Docker ---
+*.log
+docker-data/
+
+# --- Editor ---
+.vscode/
+.idea/
