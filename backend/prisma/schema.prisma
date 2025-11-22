@@ -4,14 +4,15 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
+  // Descomenta esta línea para que lea del .env
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  // directUrl = env("DIRECT_URL") // Opcional, con la config de arriba no es estricto, pero puedes dejarlo.
 }
 
 model Mensaje {
   id        Int      @id @default(autoincrement())
   contenido String
-  usuarioId String   // ID de Supabase
-  email     String?  // Email del usuario
-  fecha     DateTime @default(now()) // Antes era createdAt
+  usuarioId String   
+  email     String?  
+  fecha     DateTime @default(now())
 }

@@ -1,79 +1,110 @@
-require('dotenv').config();
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const { PrismaClient } = require('@prisma/client');
-const cors = require('cors');
+// server/index.js
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import cors from 'cors';
+import { PrismaClient } from '@prisma/client';
+import dotenv from 'dotenv';
 
-// Configuración de Redis (Upstash)
-const { createClient } = require('redis');
-const { createAdapter } = require('@socket.io/redis-adapter');
+// Configuración de Redis (Opcional para el futuro, no rompe nada si falla)
+import { createClient } from 'redis';
+import { createAdapter } from '@socket.io/redis-adapter';
+
+dotenv.config();
 
 const app = express();
-const server = http.createServer(app);
+const port = process.env.PORT || 3001; // Puerto 3001 para no chocar con Vue
 const prisma = new PrismaClient();
 
 app.use(cors());
 app.use(express.json());
 
+const httpServer = createServer(app);
+
 async function startServer() {
   
-  // 1. Intentar conectar a Redis (si está configurado en .env)
+  // --- 1. Configuración de Redis (Resiliente: Si falla, usa memoria) ---
   let adapter = null;
   if (process.env.REDIS_URL) {
-      try {
-        const pubClient = createClient({ url: process.env.REDIS_URL });
-        const subClient = pubClient.duplicate();
-        await Promise.all([pubClient.connect(), subClient.connect()]);
-        adapter = createAdapter(pubClient, subClient);
-        console.log("Conectado a Redis (Upstash)");
-      } catch (error) {
-        console.log("Sin Redis, usando memoria local.");
-      }
+    try {
+      const pubClient = createClient({ url: process.env.REDIS_URL });
+      const subClient = pubClient.duplicate();
+      
+      // Evitamos que errores de conexión tumben el servidor
+      pubClient.on('error', (err) => console.error('Redis Pub Error:', err));
+      subClient.on('error', (err) => console.error('Redis Sub Error:', err));
+      
+      await Promise.all([pubClient.connect(), subClient.connect()]);
+      adapter = createAdapter(pubClient, subClient);
+      console.log(" Conectado a Redis (Upstash)");
+    } catch (error) {
+      console.log(" No se pudo conectar a Redis. Usando memoria local (Modo Seguro).");
+    }
   }
 
-  // 2. Configurar Socket.io
-  const io = new Server(server, {
-    cors: { origin: "*" },
+  // --- 2. Configurar Socket.io ---
+  const io = new Server(httpServer, {
+    cors: { origin: "*" }, // Permite conexiones desde cualquier lugar (Vue)
     adapter: adapter
   });
 
+  // ==================================================================
+  //  AQUÍ ESTÁ TU USER STORY 03 (Parte HTTP)
+  //  [Back] Crear ruta REST GET /api/messages
+  // ==================================================================
+  app.get('/api/messages', async (req, res) => {
+    try {
+      const historial = await prisma.mensaje.findMany({
+        take: 50,                  // Criterio: Cargar últimos 50
+        orderBy: { fecha: 'asc' }  // Criterio: Ordenados por fecha
+      });
+      res.json(historial);
+    } catch (error) {
+      console.error("Error obteniendo historial:", error);
+      res.status(500).json({ error: "Error al cargar mensajes" });
+    }
+  });
+
+  app.get('/', (req, res) => {
+    res.send('<h1>Servidor TalkNet Activo </h1><p>Ve a /api/messages para ver el historial.</p>');
+  });
+
+  // ==================================================================
+  //  AQUÍ ESTÁ TU USER STORY 03 (Parte Socket)
+  //  [Back] Modificar evento para guardar con prisma.message.create()
+  // ==================================================================
   io.on('connection', (socket) => {
-    console.log('Cliente conectado:', socket.id);
+    console.log(`Cliente conectado: ${socket.id}`);
 
-    // A) Enviar Historial (Usando tabla 'Mensaje')
-    socket.on('pedir_historial', async () => {
-      try {
-        const historial = await prisma.mensaje.findMany({
-          take: 50,
-          orderBy: { fecha: 'asc' }
-        });
-        socket.emit('historial_recibido', historial);
-      } catch (e) {
-        console.error("Error DB:", e);
-      }
-    });
-
-    // B) Recibir nuevo mensaje
     socket.on('enviar_mensaje', async (datos) => {
+      // datos = { contenido: "Hola", usuarioId: "Juan", email: "juan@test.com" }
       try {
+        // 1. GUARDAR EN BASE DE DATOS (Persistencia)
         const nuevoMensaje = await prisma.mensaje.create({
           data: {
             contenido: datos.contenido,
-            usuarioId: datos.usuarioId || 'anonimo',
-            email:     datos.email || 'Desconocido'
+            usuarioId: datos.usuarioId || 'Anonimo', // Tu schema usa String, así que esto funciona directo
+            email: datos.email || null
           }
         });
+
+        // 2. RETRANSMITIR EL MENSAJE GUARDADO (Con ID y Fecha reales)
         io.emit('nuevo_mensaje', nuevoMensaje);
+        
       } catch (e) {
-        console.error("Error guardando:", e);
+        console.error("Error guardando mensaje en BD:", e);
+        // Opcional: Avisar al que envió que hubo un error
+        socket.emit('error_envio', { mensaje: "No se pudo guardar tu mensaje" });
       }
+    });
+
+    socket.on('disconnect', () => {
+      console.log('Cliente desconectado');
     });
   });
 
-  const PORT = process.env.PORT || 3000;
-  server.listen(PORT, () => {
-    console.log(`Servidor listo en puerto ${PORT}`);
+  httpServer.listen(port, () => {
+    console.log(` Servidor corriendo en http://localhost:${port}`);
   });
 }
 
