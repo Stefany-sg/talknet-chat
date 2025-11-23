@@ -21,6 +21,10 @@ app.use(express.json());
 
 const httpServer = createServer(app);
 
+//  US-04: Mapa para rastrear usuarios conectados (en memoria, NO en BD)
+
+const usuariosConectados = new Map();
+
 async function startServer() {
   
   // --- 1. Configuración de Redis (Resiliente: Si falla, usa memoria) ---
@@ -36,9 +40,9 @@ async function startServer() {
       
       await Promise.all([pubClient.connect(), subClient.connect()]);
       adapter = createAdapter(pubClient, subClient);
-      console.log(" Conectado a Redis (Upstash)");
+      console.log("Conectado a Redis (Upstash)");
     } catch (error) {
-      console.log(" No se pudo conectar a Redis. Usando memoria local (Modo Seguro).");
+      console.log("No se pudo conectar a Redis. Usando memoria local (Modo Seguro).");
     }
   }
 
@@ -48,10 +52,8 @@ async function startServer() {
     adapter: adapter
   });
 
-  // ==================================================================
   //  AQUÍ ESTÁ TU USER STORY 03 (Parte HTTP)
   //  [Back] Crear ruta REST GET /api/messages
-  // ==================================================================
   app.get('/api/messages', async (req, res) => {
     try {
       const historial = await prisma.mensaje.findMany({
@@ -69,13 +71,63 @@ async function startServer() {
     res.send('<h1>Servidor TalkNet Activo </h1><p>Ve a /api/messages para ver el historial.</p>');
   });
 
-  // ==================================================================
   //  AQUÍ ESTÁ TU USER STORY 03 (Parte Socket)
   //  [Back] Modificar evento para guardar con prisma.message.create()
-  // ==================================================================
+
   io.on('connection', (socket) => {
+    // US-04: Asignar nombre temporal al conectarse
+    socket.data.nombreUsuario = `Usuario_${socket.id.substring(0, 6)}`;
     console.log(`Cliente conectado: ${socket.id}`);
 
+    //  US-04: REGISTRO DE USUARIO (cuando el frontend envía sus datos)
+    //  [Back] Detectar evento 'registrar_usuario' y emitir 'user_joined'
+    
+    socket.on('registrar_usuario', (datosUsuario) => {
+      // Guardar nombre del usuario en la sesión del socket
+      const nombreAnterior = socket.data.nombreUsuario;
+      socket.data.nombreUsuario = datosUsuario.nombre || 
+                                   datosUsuario.email?.split('@')[0] || 
+                                   nombreAnterior;
+
+      // Guardar en el mapa de usuarios conectados (NO en BD)
+      usuariosConectados.set(socket.id, {
+        socketId: socket.id,
+        id: datosUsuario.id || socket.id,
+        nombre: socket.data.nombreUsuario,
+        email: datosUsuario.email || null,
+        conectadoEn: new Date().toISOString()
+      });
+
+      console.log(`[US-04]  ${socket.data.nombreUsuario} se ha unido`);
+      console.log(`[US-04]  Total online: ${usuariosConectados.size}`);
+
+      // Emitir 'user_joined' a TODOS los clientes
+      // Criterio: Mensaje tipo sistema "Usuario_123 se ha unido"
+      io.emit('user_joined', {
+        tipo: 'sistema',
+        evento: 'user_joined',
+        mensaje: `${socket.data.nombreUsuario} se ha unido`,
+        usuario: usuariosConectados.get(socket.id),
+        timestamp: new Date().toISOString()
+      });
+
+      // Emitir lista actualizada de usuarios online (para el contador)
+      io.emit('usuarios_online', {
+        usuarios: Array.from(usuariosConectados.values()),
+        total: usuariosConectados.size
+      });
+    });
+
+    //  US-04: SOLICITAR USUARIOS ONLINE
+    //  [Back] Enviar lista de usuarios conectados al cliente que lo pida
+    socket.on('pedir_usuarios_online', () => {
+      socket.emit('usuarios_online', {
+        usuarios: Array.from(usuariosConectados.values()),
+        total: usuariosConectados.size
+      });
+    });
+
+    //  US-02 & US-03: ENVÍO DE MENSAJES
     socket.on('enviar_mensaje', async (datos) => {
       // datos = { contenido: "Hola", usuarioId: "Juan", email: "juan@test.com" }
       try {
@@ -97,14 +149,36 @@ async function startServer() {
         socket.emit('error_envio', { mensaje: "No se pudo guardar tu mensaje" });
       }
     });
-
+    //  US-04: DESCONEXIÓN
+    //  [Back] Detectar evento 'disconnect' y emitir 'user_left'
     socket.on('disconnect', () => {
-      console.log('Cliente desconectado');
+      const nombreDesconectado = socket.data.nombreUsuario;
+      console.log(`[US-04] ${nombreDesconectado} se ha desconectado`);
+
+      // Eliminar del mapa de usuarios conectados
+      usuariosConectados.delete(socket.id);
+
+      console.log(`[US-04] Total online: ${usuariosConectados.size}`);
+
+      // Emitir 'user_left' a TODOS los clientes
+      // Criterio: Mensaje tipo sistema "Juan Perez se ha desconectado"
+      io.emit('user_left', {
+        tipo: 'sistema',
+        evento: 'user_left',
+        mensaje: `${nombreDesconectado} se ha desconectado`,
+        timestamp: new Date().toISOString()
+      });
+
+      // Emitir lista actualizada de usuarios online
+      io.emit('usuarios_online', {
+        usuarios: Array.from(usuariosConectados.values()),
+        total: usuariosConectados.size
+      });
     });
   });
 
   httpServer.listen(port, () => {
-    console.log(` Servidor corriendo en http://localhost:${port}`);
+    console.log(`Servidor corriendo en http://localhost:${port}`);
   });
 }
 

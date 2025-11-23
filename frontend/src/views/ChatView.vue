@@ -1,30 +1,34 @@
 <script setup>
 import { onMounted } from 'vue'
 import { useChatStore } from '../stores/chat'
-import ChatBox from '../components/ChatBox.vue' // Importamos el componente visual
+import ChatBox from '../components/ChatBox.vue'
 import { useUserStore } from '../stores/user'
 
 const store = useChatStore()
 const userStore = useUserStore()
-// --- INICIALIZACIÓN (US-02 + US-03) ---
-// En lugar de llamar solo a fetchMessages, llamamos a 'iniciar'.
-// 'iniciar' hace dos cosas:
-// 1. Carga el historial (US-03)
-// 2. Conecta el Socket para tiempo real (US-02)
-onMounted(() => {
-  store.iniciar()
+
+// INICIALIZACIÓN (US-02 + US-03 + US-04)
+onMounted(async () => {
+  // US-04: Iniciar conexión WebSocket y listeners de presencia
+  store.iniciarSocket()
+  
+  // US-03: Cargar historial de mensajes (últimos 50)
+  await store.fetchMessages()
+  
+  console.log('Chat inicializado: Socket + Historial')
 })
 </script>
 
 <template>
   <div class="main-layout">
+    
     <!-- CABECERA GLOBAL -->
     <header class="app-header">
-      <h1>TalkNet 💬</h1>
+      <h1>TalkNet </h1>
       
       <!-- Controles de Usuario (Solo si está logueado) -->
       <div v-if="userStore.usuario" class="user-controls">
-        <span class="user-email">{{ store.usuario.email }}</span>
+        <span class="user-email">{{ userStore.usuario.email }}</span>
         <button @click="store.logout" class="btn-logout">Salir</button>
       </div>
     </header>
@@ -32,7 +36,7 @@ onMounted(() => {
     <!-- CONTENIDO PRINCIPAL -->
     <main class="content-area">
       <div class="chat-wrapper">
-        <!-- Aquí cargamos el ChatBox que tiene los estilos de burbujas y scroll -->
+        <!-- ChatBox con US-02 (mensajes) + US-04 (presencia) -->
         <ChatBox />
       </div>
     </main>
@@ -61,13 +65,20 @@ onMounted(() => {
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
-.app-header h1 { margin: 0; font-size: 1.3rem; }
+.app-header h1 { 
+  margin: 0; 
+  font-size: 1.3rem; 
+}
 
 .user-controls {
   display: flex;
   align-items: center;
   gap: 15px;
   font-size: 0.9rem;
+}
+
+.user-email {
+  opacity: 0.9;
 }
 
 .btn-logout {
@@ -78,6 +89,11 @@ onMounted(() => {
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+.btn-logout:hover {
+  background: rgba(255,255,255,0.3);
 }
 
 /* --- ÁREA CENTRAL --- */
@@ -90,34 +106,11 @@ onMounted(() => {
   overflow: hidden;
 }
 
-/* --- LOGIN --- */
-.login-card {
-  background: white;
-  padding: 40px;
-  border-radius: 10px;
-  text-align: center;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-  width: 100%;
-  max-width: 400px;
-}
-
-.btn-google {
-  background: #4285f4;
-  color: white;
-  border: 1px solid #ddd;
-  padding: 12px 20px;
-  border-radius: 5px;
-  font-size: 1rem;
-  font-weight: bold;
-  cursor: pointer;
-  margin-top: 15px;
-  width: 100%;
-}
-
 /* --- CONTENEDOR CHAT --- */
 .chat-wrapper {
   width: 100%;
   max-width: 900px;
   height: 100%;
+  max-height: 700px;
 }
 </style>
