@@ -1,11 +1,16 @@
 <script setup>
+
 import { ref, nextTick, watch, onMounted } from 'vue'
 import { useChatStore } from '../stores/chat'
+
+// US-04: Importar componentes de presencia
+import MensajeSistema from './MensajeSistema.vue'
+import ContadorOnline from './ContadorOnline.vue'
 
 const store = useChatStore()
 const texto = ref('')
 const fondoChat = ref(null)
-
+//
 // --- SCROLL AUTOMÁTICO ---
 // Baja al final cada vez que llega un mensaje o se carga el componente
 const bajarScroll = () => {
@@ -37,12 +42,23 @@ const enviar = () => {
 </script>
 
 <template>
+  
   <div class="chat-interface">
     
-    <!-- Cabecera Interna (Opcional, para ver estado) -->
+    <!-- Cabecera Interna con estado y contador US-04 -->
     <div class="chat-header-internal">
-      <span v-if="store.conectado" class="status-online">● En línea</span>
-      <span v-else class="status-offline">● Conectando...</span>
+      <div class="header-left">
+        <span v-if="store.conectado" class="status-online">● En línea</span>
+        <span v-else class="status-offline">● Conectando...</span>
+      </div>
+      
+      <!-- US-04: Contador de usuarios conectados en vivo -->
+      <div class="header-right">
+        <ContadorOnline 
+          :usuarios="store.usuariosOnline" 
+          :total="store.totalOnline" 
+        />
+      </div>
     </div>
 
     <!-- 1. ÁREA DE MENSAJES -->
@@ -53,33 +69,48 @@ const enviar = () => {
         <p>No hay mensajes. ¡Saluda a tu equipo!</p>
       </div>
 
-      <div 
-        v-for="msg in store.messages" 
-        :key="msg.id || Math.random()" 
-        class="message-row"
-        :class="{ 
-          'mio': store.usuario && msg.usuarioId === store.usuario.id, 
-          'otro': !store.usuario || msg.usuarioId !== store.usuario.id 
-        }"
-      >
-        <!-- Nombre del remitente (Solo si es Otro) -->
-        <small 
-          v-if="!store.usuario || msg.usuarioId !== store.usuario.id" 
-          class="sender-name"
-        >
-          {{ msg.email ? msg.email.split('@')[0] : 'Anónimo' }}
-        </small>
+      <!-- Iterar sobre mensajes -->
+      <template v-for="msg in store.messages" :key="msg.id || Math.random()">
+        
+        <!-- ================================================ -->
+        <!-- US-04: MENSAJE DE SISTEMA (unión/salida) -->
+        <!-- Criterio: Mensaje en GRIS e ITÁLICA -->
+        <!-- ================================================ -->
+        <MensajeSistema 
+          v-if="msg.tipo === 'sistema'" 
+          :mensaje="msg" 
+        />
 
-        <!-- La Burbuja -->
-        <div class="bubble">
-          {{ msg.contenido }}
-          
-          <!-- Hora -->
-          <span class="time" v-if="msg.fecha">
-            {{ new Date(msg.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}
-          </span>
+        <!-- ================================================ -->
+        <!-- MENSAJE NORMAL DE CHAT -->
+        <!-- ================================================ -->
+        <div 
+          v-else
+          class="message-row"
+          :class="{ 
+            'mio': store.usuario && msg.usuarioId === store.usuario.id, 
+            'otro': !store.usuario || msg.usuarioId !== store.usuario.id 
+          }"
+        >
+          <!-- Nombre del remitente (Solo si es Otro) -->
+          <small 
+            v-if="!store.usuario || msg.usuarioId !== store.usuario.id" 
+            class="sender-name"
+          >
+            {{ msg.email ? msg.email.split('@')[0] : 'Anónimo' }}
+          </small>
+
+          <!-- La Burbuja -->
+          <div class="bubble">
+            {{ msg.contenido }}
+            
+            <!-- Hora -->
+            <span class="time" v-if="msg.fecha">
+              {{ new Date(msg.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}
+            </span>
+          </div>
         </div>
-      </div>
+      </template>
     </div>
 
     <!-- 2. ÁREA DE INPUT -->
@@ -116,14 +147,28 @@ const enviar = () => {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
+/* --- HEADER MODIFICADO PARA US-04 --- */
 .chat-header-internal {
-  padding: 5px 10px;
-  background: #f9f9f9;
-  font-size: 0.75rem;
-  text-align: center;
-  color: #666;
+  padding: 8px 15px;
+  background: linear-gradient(135deg, #00a884, #008f6f);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
-.status-online { color: #00a884; font-weight: bold; }
+
+.header-left {
+  font-size: 0.8rem;
+}
+
+.status-online { 
+  color: #d9fdd3; 
+  font-weight: bold; 
+}
+
+.status-offline {
+  color: #ffcccc;
+}
+
 
 /* --- MENSAJES --- */
 .messages-area {
