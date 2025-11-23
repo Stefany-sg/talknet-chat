@@ -1,62 +1,138 @@
 <script setup>
-import { onMounted } from 'vue';
-import { useChatStore } from '../stores/chat';
+import { onMounted } from 'vue'
+import { useChatStore } from '../stores/chat'
+import ChatBox from '../components/ChatBox.vue' // Importamos el componente visual
 
-const chatStore = useChatStore();
+const store = useChatStore()
 
-// --- TU PARTE CRÍTICA (US-03) ---
-// "Al entrar, se deben cargar los últimos 50 mensajes."
-onMounted(async () => {
-  await chatStore.fetchMessages();
-  scrollToBottom(); // Pequeña ayuda de usabilidad
-});
-
-// Función auxiliar simple para el scroll inicial
-const scrollToBottom = () => {
-  setTimeout(() => {
-    const container = document.getElementById('messages-box');
-    if(container) container.scrollTop = container.scrollHeight;
-  }, 100);
-};
+// --- INICIALIZACIÓN (US-02 + US-03) ---
+// En lugar de llamar solo a fetchMessages, llamamos a 'iniciar'.
+// 'iniciar' hace dos cosas:
+// 1. Carga el historial (US-03)
+// 2. Conecta el Socket para tiempo real (US-02)
+onMounted(() => {
+  store.iniciar()
+})
 </script>
 
 <template>
-  <div class="chat-layout">
-    <h2>Historial de Chat (US-03 Test)</h2>
-    
-    <div id="messages-box" class="history-container">
-      <p v-if="chatStore.messages.length === 0">Cargando historial o chat vacío...</p>
-
-      <div 
-        v-for="msg in chatStore.messages" 
-        :key="msg.id" 
-        class="message-item"
-      >
-        <strong>{{ msg.usuarioId }}:</strong>
-        <span>{{ msg.contenido }}</span>
-        <small style="display:block; color:gray; font-size:0.7em">
-          {{ new Date(msg.fecha).toLocaleString() }}
-        </small>
+  <div class="main-layout">
+    <!-- CABECERA GLOBAL -->
+    <header class="app-header">
+      <h1>TalkNet 💬</h1>
+      
+      <!-- Controles de Usuario (Solo si está logueado) -->
+      <div v-if="store.usuario" class="user-controls">
+        <span class="user-email">{{ store.usuario.email }}</span>
+        <button @click="store.logout" class="btn-logout">Salir</button>
       </div>
-    </div>
+    </header>
 
-    <div style="margin-top: 10px;">
-      <input type="text" placeholder="Área de US-02 (Sockets)" disabled />
-      <button disabled>Enviar</button>
-    </div>
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="content-area">
+      
+      <!-- ESCENARIO 1: LOGIN (Si no hay usuario) -->
+      <div v-if="!store.usuario" class="login-container">
+        <div class="login-card">
+          <h2>Bienvenido</h2>
+          <p>Identifícate para entrar al chat.</p>
+          
+          <!-- Botón de Google (US-01) -->
+          <button @click="store.loginGoogle" class="btn-google">
+            Entrar con Google
+          </button>
+        </div>
+      </div>
+
+      <!-- ESCENARIO 2: CHAT (Si hay usuario) -->
+      <div v-else class="chat-wrapper">
+        <!-- Aquí cargamos el ChatBox que tiene los estilos de burbujas y scroll -->
+        <ChatBox />
+      </div>
+
+    </main>
   </div>
 </template>
 
 <style scoped>
-.history-container {
-  border: 2px dashed #ccc; /* Borde punteado para indicar que es estructura */
-  height: 300px;
-  overflow-y: auto;
-  padding: 10px;
-  background: #f9f9f9;
+/* --- LAYOUT --- */
+.main-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #d1d7db;
+  font-family: 'Segoe UI', sans-serif;
 }
-.message-item {
-  border-bottom: 1px solid #eee;
-  padding: 5px 0;
+
+/* --- HEADER --- */
+.app-header {
+  background-color: #00a884;
+  color: white;
+  padding: 0 20px;
+  height: 60px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.app-header h1 { margin: 0; font-size: 1.3rem; }
+
+.user-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  font-size: 0.9rem;
+}
+
+.btn-logout {
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+/* --- ÁREA CENTRAL --- */
+.content-area {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  overflow: hidden;
+}
+
+/* --- LOGIN --- */
+.login-card {
+  background: white;
+  padding: 40px;
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  width: 100%;
+  max-width: 400px;
+}
+
+.btn-google {
+  background: #4285f4;
+  color: white;
+  border: 1px solid #ddd;
+  padding: 12px 20px;
+  border-radius: 5px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 15px;
+  width: 100%;
+}
+
+/* --- CONTENEDOR CHAT --- */
+.chat-wrapper {
+  width: 100%;
+  max-width: 900px;
+  height: 100%;
 }
 </style>

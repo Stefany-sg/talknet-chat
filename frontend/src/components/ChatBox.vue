@@ -1,18 +1,13 @@
 <script setup>
-
 import { ref, nextTick, watch, onMounted } from 'vue'
 import { useChatStore } from '../stores/chat'
-
-// US-04: Importar componentes de presencia
-import MensajeSistema from './MensajeSistema.vue'
-import ContadorOnline from './ContadorOnline.vue'
 
 const store = useChatStore()
 const texto = ref('')
 const fondoChat = ref(null)
-//
-// --- SCROLL AUTOMÁTICO ---
-// Baja al final cada vez que llega un mensaje o se carga el componente
+
+// --- US-05: Scroll automático ---
+// Baja al final cada vez que llega un mensaje o carga el historial
 const bajarScroll = () => {
   if (fondoChat.value) {
     fondoChat.value.scrollTo({
@@ -24,7 +19,7 @@ const bajarScroll = () => {
 
 // Vigilar cambios en la lista de mensajes
 watch(() => store.messages.length, async () => {
-  await nextTick() // Esperar a que Vue actualice el DOM
+  await nextTick() // Esperar a que Vue termine de pintar
   bajarScroll()
 })
 
@@ -32,7 +27,7 @@ onMounted(() => {
   bajarScroll()
 })
 
-// --- ENVÍO DE MENSAJES ---
+// --- US-02: Envío de mensajes ---
 const enviar = () => {
   if (texto.value.trim()) {
     store.enviarMensaje(texto.value)
@@ -42,143 +37,94 @@ const enviar = () => {
 </script>
 
 <template>
-  
-  <div class="chat-interface">
-    
-    <!-- Cabecera Interna con estado y contador US-04 -->
-    <div class="chat-header-internal">
-      <div class="header-left">
-        <span v-if="store.conectado" class="status-online">● En línea</span>
-        <span v-else class="status-offline">● Conectando...</span>
-      </div>
-      
-      <!-- US-04: Contador de usuarios conectados en vivo -->
-      <div class="header-right">
-        <ContadorOnline 
-          :usuarios="store.usuariosOnline" 
-          :total="store.totalOnline" 
-        />
-      </div>
+  <div class="chat-container">
+    <!-- Cabecera interna -->
+    <div class="header">
+      <span>Conectado como: {{ store.usuario?.email }}</span>
+      <button @click="store.logout" class="btn-salir">Salir</button>
     </div>
 
-    <!-- 1. ÁREA DE MENSAJES -->
-    <div class="messages-area" ref="fondoChat">
-      
-      <!-- Estado Vacío -->
+    <!-- Área de mensajes -->
+    <div class="mensajes-area" ref="fondoChat">
       <div v-if="store.messages.length === 0" class="empty-state">
-        <p>No hay mensajes. ¡Saluda a tu equipo!</p>
+        <p>No hay mensajes aún. ¡Saluda!</p>
       </div>
 
-      <!-- Iterar sobre mensajes -->
-      <template v-for="msg in store.messages" :key="msg.id || Math.random()">
-        
-        <!-- ================================================ -->
-        <!-- US-04: MENSAJE DE SISTEMA (unión/salida) -->
-        <!-- Criterio: Mensaje en GRIS e ITÁLICA -->
-        <!-- ================================================ -->
-        <MensajeSistema 
-          v-if="msg.tipo === 'sistema'" 
-          :mensaje="msg" 
-        />
-
-        <!-- ================================================ -->
-        <!-- MENSAJE NORMAL DE CHAT -->
-        <!-- ================================================ -->
-        <div 
-          v-else
-          class="message-row"
-          :class="{ 
-            'mio': store.usuario && msg.usuarioId === store.usuario.id, 
-            'otro': !store.usuario || msg.usuarioId !== store.usuario.id 
-          }"
+      <div 
+        v-for="msg in store.messages" 
+        :key="msg.id || Math.random()" 
+        class="mensaje-wrapper"
+        :class="{ 
+          'propio': store.usuario && msg.usuarioId === store.usuario.id, 
+          'ajeno': !store.usuario || msg.usuarioId !== store.usuario.id 
+        }"
+      >
+        <!-- Nombre del remitente (solo si es ajeno) -->
+        <small 
+          class="autor" 
+          v-if="!store.usuario || msg.usuarioId !== store.usuario.id"
         >
-          <!-- Nombre del remitente (Solo si es Otro) -->
-          <small 
-            v-if="!store.usuario || msg.usuarioId !== store.usuario.id" 
-            class="sender-name"
-          >
-            {{ msg.email ? msg.email.split('@')[0] : 'Anónimo' }}
-          </small>
-
-          <!-- La Burbuja -->
-          <div class="bubble">
-            {{ msg.contenido }}
-            
-            <!-- Hora -->
-            <span class="time" v-if="msg.fecha">
-              {{ new Date(msg.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}
-            </span>
-          </div>
+          {{ msg.email ? msg.email.split('@')[0] : 'Anónimo' }}
+        </small>
+        
+        <!-- Burbuja de texto -->
+        <div class="burbuja">
+          {{ msg.contenido }}
+          <!-- Hora (Opcional, si el mensaje tiene fecha) -->
+          <span v-if="msg.fecha" class="hora">
+            {{ new Date(msg.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}
+          </span>
         </div>
-      </template>
+      </div>
     </div>
 
-    <!-- 2. ÁREA DE INPUT -->
+    <!-- Área de Input -->
     <div class="input-area">
       <input 
         v-model="texto" 
         @keyup.enter="enviar" 
-        type="text" 
         placeholder="Escribe un mensaje..." 
-        class="chat-input"
-        :disabled="!store.usuario" 
+        :disabled="!store.usuario"
       />
       <button 
         @click="enviar" 
-        class="btn-send" 
         :disabled="!texto || !store.usuario"
       >
-        ➤
+        Enviar
       </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* --- ESTRUCTURA --- */
-.chat-interface {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background-color: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+.chat-container { 
+  display: flex; 
+  flex-direction: column; 
+  height: 500px; 
+  border: 1px solid #ccc; 
+  border-radius: 10px; 
+  background: #fff; 
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
   overflow: hidden;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-/* --- HEADER MODIFICADO PARA US-04 --- */
-.chat-header-internal {
-  padding: 8px 15px;
-  background: linear-gradient(135deg, #00a884, #008f6f);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.header { 
+  padding: 10px; 
+  background: #eee; 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  border-bottom: 1px solid #ccc; 
 }
 
-.header-left {
-  font-size: 0.8rem;
-}
-
-.status-online { 
-  color: #d9fdd3; 
-  font-weight: bold; 
-}
-
-.status-offline {
-  color: #ffcccc;
-}
-
-
-/* --- MENSAJES --- */
-.messages-area {
-  flex: 1;
-  padding: 20px;
-  overflow-y: auto;
-  background-color: #e5ded8; /* Fondo WhatsApp */
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.mensajes-area { 
+  flex: 1; 
+  padding: 20px; 
+  overflow-y: auto; 
+  display: flex; 
+  flex-direction: column; 
+  gap: 10px; 
+  background-color: #f0f2f5;
 }
 
 .empty-state {
@@ -188,98 +134,82 @@ const enviar = () => {
   font-style: italic;
 }
 
-.message-row {
-  display: flex;
-  flex-direction: column;
-  max-width: 75%;
+/* --- ESTILOS CLAVE PARA US-02 (Derecha/Izquierda) --- */
+.mensaje-wrapper { 
+  max-width: 70%; 
+  display: flex; 
+  flex-direction: column; 
 }
 
-/* --- CLASES DINÁMICAS (US-02) --- */
-
-/* Míos (Derecha + Verde) */
-.mio {
-  align-self: flex-end;
-  align-items: flex-end;
+/* Mis mensajes (Derecha) */
+.mensaje-wrapper.propio { 
+  align-self: flex-end; 
+  align-items: flex-end; 
 }
-.mio .bubble {
-  background-color: #d9fdd3; 
-  color: #111;
-  border-radius: 10px 0 10px 10px;
+.mensaje-wrapper.propio .burbuja { 
+  background: #007bff; 
+  color: white; 
+  border-radius: 15px 15px 0 15px; 
 }
 
-/* Otros (Izquierda + Blanco) */
-.otro {
-  align-self: flex-start;
-  align-items: flex-start;
+/* Mensajes de otros (Izquierda) */
+.mensaje-wrapper.ajeno { 
+  align-self: flex-start; 
+  align-items: flex-start; 
 }
-.otro .bubble {
-  background-color: #ffffff;
-  color: #111;
-  border-radius: 0 10px 10px 10px;
+.mensaje-wrapper.ajeno .burbuja { 
+  background: #e9ecef; 
+  color: black; 
+  border-radius: 15px 15px 15px 0; 
 }
 
-/* --- DETALLES --- */
-.bubble {
-  padding: 8px 12px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+.burbuja { 
+  padding: 10px 15px; 
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1); 
   font-size: 0.95rem;
-  line-height: 1.4;
-  position: relative;
   word-wrap: break-word;
-  display: flex;
-  flex-direction: column;
 }
 
-.sender-name {
-  font-size: 0.75rem;
-  color: #e542a3;
-  font-weight: bold;
-  margin-bottom: 2px;
+.autor { 
+  font-size: 0.75rem; 
+  color: #666; 
+  margin-bottom: 4px; 
   margin-left: 5px;
 }
 
-.time {
+.hora {
   font-size: 0.65rem;
-  color: #999;
-  align-self: flex-end;
-  margin-top: 4px;
+  margin-left: 8px;
+  opacity: 0.7;
 }
 
-/* --- INPUT --- */
-.input-area {
-  padding: 10px;
-  background-color: #f0f2f5;
-  border-top: 1px solid #ddd;
-  display: flex;
-  gap: 10px;
-  align-items: center;
+.input-area { 
+  padding: 15px; 
+  border-top: 1px solid #ccc; 
+  display: flex; 
+  gap: 10px; 
+  background: white;
 }
 
-.chat-input {
-  flex: 1;
-  padding: 12px 15px;
-  border: none;
-  border-radius: 24px;
+input { 
+  flex: 1; 
+  padding: 10px; 
+  border-radius: 20px; 
+  border: 1px solid #ddd; 
   outline: none;
-  font-size: 1rem;
-  background-color: #ffffff;
 }
 
-.btn-send {
-  background-color: #00a884;
+button {
+  padding: 10px 20px;
+  background: #007bff;
   color: white;
   border: none;
-  width: 45px;
-  height: 45px;
-  border-radius: 50%;
-  font-size: 1.2rem;
+  border-radius: 20px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s;
+  font-weight: bold;
 }
-
-.btn-send:hover:not(:disabled) { background-color: #008f6f; }
-.btn-send:disabled { background-color: #ccc; cursor: not-allowed; }
+button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
 </style>
