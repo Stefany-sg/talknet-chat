@@ -2,31 +2,32 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { io } from 'socket.io-client'
 import { supabase } from '../supabase'
+import router from '@/router'
+import { useUserStore } from './user'
 
 export const useChatStore = defineStore('chat', () => {
   // --- ESTADO ---
   const messages = ref([])
-  const usuario = ref(null)
   const socket = ref(null)
   const conectado = ref(false)
+  // HU-4
+  const usersOnlineCount = ref(0) 
+  const usersOnlineList = ref([])
+
+  // 💡 COMPUTADO: Leer el usuario directamente del UserStore
+    const userStore = useUserStore()
+    const usuario = ref(userStore.usuario) // ⬅️ Usamos el usuario del userStore
 
   // --- ACCIÓN PRINCIPAL: INICIAR ---
   // Esta función orquesta todo al cargar la página
   const iniciar = async () => {
-    // 1. Auth: Ver quién soy
-    const { data } = await supabase.auth.getSession()
-    if (data.session) usuario.value = data.session.user
-
-    supabase.auth.onAuthStateChange((_, session) => {
-      usuario.value = session ? session.user : null
-    })
-
-    // 2. US-03: Cargar Historial (Lo que ya te funciona)
-    await fetchMessages()
-
-    // 3. US-02: Conectar Tiempo Real (Lo que te falta)
-    conectarSocket()
-  }
+        // 1. Auth: Ya está cargado en el userStore, solo leemos.
+        // Ya no necesitamos llamar a supabase.auth.getSession() ni onAuthStateChange aquí.
+        // 2. US-03: Cargar Historial
+        await fetchMessages()
+        // 3. US-02/04: Conectar Tiempo Real y Autenticar
+        conectarSocket(userStore.usuario) // Le pasamos la info del usuario desde el userStore
+    }
 
   // --- US-03: FETCH REST ---
   const fetchMessages = async () => {
@@ -62,11 +63,12 @@ export const useChatStore = defineStore('chat', () => {
 
   // --- US-02: ENVIAR ---
   const enviarMensaje = (texto) => {
-    if (socket.value && texto) {
+    const userData = userStore.usuario
+    if (socket.value && texto && userData) {
       const payload = {
         contenido: texto,
-        usuarioId: usuario.value?.id || 'anonimo',
-        email: usuario.value?.email || 'Anonimo'
+        usuarioId: userData.id || 'anonimo',
+        email: userData.email || 'Anonimo'
       }
       // Emitimos al backend para que lo guarde y retransmita
       socket.value.emit('enviar_mensaje', payload)
@@ -79,15 +81,17 @@ export const useChatStore = defineStore('chat', () => {
   }
   
   const logout = async () => {
-    await supabase.auth.signOut()
-    window.location.reload()
+    await userStore.logout() // ⬅ Llamar al logout del userStore (limpia Supabase y localstorage)
+    router.push({ name: 'login' }) 
   }
 
   return {
     messages,
-    usuario,
+    usuario: userStore.usuario,
     conectado,
     iniciar,
+    usersOnlineCount,
+    usersOnlineList,
     fetchMessages,
     enviarMensaje,
     loginGoogle,

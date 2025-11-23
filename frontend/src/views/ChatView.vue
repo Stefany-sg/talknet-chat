@@ -2,9 +2,10 @@
 import { onMounted } from 'vue'
 import { useChatStore } from '../stores/chat'
 import ChatBox from '../components/ChatBox.vue' // Importamos el componente visual
+import { useUserStore } from '../stores/user'
 
 const store = useChatStore()
-
+const userStore = useUserStore()
 // --- INICIALIZACIÓN (US-02 + US-03) ---
 // En lugar de llamar solo a fetchMessages, llamamos a 'iniciar'.
 // 'iniciar' hace dos cosas:
@@ -22,7 +23,7 @@ onMounted(() => {
       <h1>TalkNet 💬</h1>
       
       <!-- Controles de Usuario (Solo si está logueado) -->
-      <div v-if="store.usuario" class="user-controls">
+      <div v-if="userStore.usuario" class="user-controls">
         <span class="user-email">{{ store.usuario.email }}</span>
         <button @click="store.logout" class="btn-logout">Salir</button>
       </div>
@@ -30,26 +31,10 @@ onMounted(() => {
 
     <!-- CONTENIDO PRINCIPAL -->
     <main class="content-area">
-      
-      <!-- ESCENARIO 1: LOGIN (Si no hay usuario) -->
-      <div v-if="!store.usuario" class="login-container">
-        <div class="login-card">
-          <h2>Bienvenido</h2>
-          <p>Identifícate para entrar al chat.</p>
-          
-          <!-- Botón de Google (US-01) -->
-          <button @click="store.loginGoogle" class="btn-google">
-            Entrar con Google
-          </button>
-        </div>
-      </div>
-
-      <!-- ESCENARIO 2: CHAT (Si hay usuario) -->
-      <div v-else class="chat-wrapper">
+      <div class="chat-wrapper">
         <!-- Aquí cargamos el ChatBox que tiene los estilos de burbujas y scroll -->
         <ChatBox />
       </div>
-
     </main>
   </div>
 </template>

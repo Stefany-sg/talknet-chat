@@ -1,8 +1,10 @@
 <script setup>
 import { ref, nextTick, watch, onMounted } from 'vue'
 import { useChatStore } from '../stores/chat'
+import { useUserStore } from '../stores/user'
 
 const store = useChatStore()
+const userStore = useUserStore()
 const texto = ref('')
 const fondoChat = ref(null)
 
@@ -41,7 +43,8 @@ const enviar = () => {
     <!-- Cabecera interna -->
     <div class="header">
       <span>Conectado como: {{ store.usuario?.email }}</span>
-      <button @click="store.logout" class="btn-salir">Salir</button>
+       
+      <!-- PUEDE QUE ESTO SE BORRE --> <button @click="store.logout" class="btn-salir">Salir</button>
     </div>
 
     <!-- Área de mensajes -->
@@ -84,7 +87,7 @@ const enviar = () => {
         v-model="texto" 
         @keyup.enter="enviar" 
         placeholder="Escribe un mensaje..." 
-        :disabled="!store.usuario"
+        :disabled="!userStore.usuario"
       />
       <button 
         @click="enviar" 
