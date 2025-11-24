@@ -1,125 +1,133 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue' // <--- IMPORTANTE: watch para el vigilante
 import { io } from 'socket.io-client'
-import { supabase } from '../supabase'
+import { useUserStore } from './user' // <--- IMPORTANTE: Usamos el store maestro
 
-// Definimos el Store de Pinia llamado 'chat'
 export const useChatStore = defineStore('chat', () => {
-  
-  // --- ESTADO (VARIABLES REACTIVAS) ---
-  
-  // Almacena todos los mensajes (historial + nuevos)
+  const userStore = useUserStore() // Instancia del store de usuario
+
+  // --- ESTADO ---
   const messages = ref([])
-  
-  // Almacena la información del usuario logueado (ID, email, etc.)
-  const usuario = ref(null)
-  
-  // Almacena la instancia técnica de la conexión Socket.io
   const socket = ref(null)
-  
-  // Indica si la conexión con el servidor está activa
   const conectado = ref(false)
+  const connectedUsers = ref(0) // Contador de usuarios (US-04)
 
-  // --- ACCIONES (FUNCIONES) ---
-
-  // Función principal que inicializa todo el sistema al cargar la vista
+  // --- ACCIÓN PRINCIPAL ---
   const iniciar = async () => {
-    // 1. Autenticación: Verifica si existe una sesión activa en Supabase
-    const { data } = await supabase.auth.getSession()
-    if (data.session) usuario.value = data.session.user
-
-    // Configura un escuchador para detectar si el usuario inicia o cierra sesión
-    supabase.auth.onAuthStateChange((_, session) => {
-      usuario.value = session ? session.user : null
-    })
-
-    // 2. Historial: Llama a la función que descarga los mensajes antiguos
+    // 1. Cargar Historial
     await fetchMessages()
-
-    // 3. Tiempo Real: Llama a la función que conecta el socket
+    // 2. Conectar Socket
     conectarSocket()
   }
 
-  // Función para obtener el historial de mensajes vía HTTP (REST API)
+  // --- API REST ---
   const fetchMessages = async () => {
     try {
-      // Realiza una petición GET al servidor en el puerto 3001
       const response = await fetch('http://localhost:3001/api/messages')
-      
-      // Verifica si la respuesta fue exitosa
       if (!response.ok) throw new Error('Error al conectar API')
-      
-      // Convierte la respuesta a JSON
       const data = await response.json()
-      
-      // Guarda los datos recibidos en la variable messages
-      messages.value = data 
-      console.log("Historial cargado:", data.length)
+      messages.value = data
+      console.log("✅ Historial cargado:", data.length)
     } catch (error) {
-      console.error("Error fetch:", error)
+      console.error("❌ Error fetch:", error)
     }
   }
 
-  // Función para establecer la conexión WebSocket en tiempo real
+  // --- SOCKETS ---
   const conectarSocket = () => {
-    // Si ya existe una conexión, evita crear una nueva
     if (socket.value) return 
 
-    // Conecta con el servidor Socket.io en el puerto 3001
     socket.value = io('http://localhost:3001')
 
-    // Evento de conexión exitosa
     socket.value.on('connect', () => {
       conectado.value = true
-      console.log("Socket Conectado")
+      console.log("🟢 Socket Conectado")
+      
+      // CRÍTICO: Presentarse al servidor
+      identificarse()
     })
 
-    // Evento crítico: Escucha cuando el servidor envía un mensaje nuevo
+    socket.value.on('disconnect', () => {
+      conectado.value = false
+      console.log("🔴 Socket Desconectado")
+    })
+
+    // Mensajes normales
     socket.value.on('nuevo_mensaje', (msg) => {
-      // Agrega el mensaje recibido al final del array messages
-      // Esto actualiza la vista automáticamente
-      messages.value.push(msg) 
+      messages.value.push(msg)
+    })
+
+    // US-04: Mensajes de Sistema (Entrada/Salida)
+    const agregarMensajeSistema = (evento) => {
+      messages.value.push({
+         id: Date.now(),
+         contenido: evento.mensaje,
+         usuarioId: 'Sistema',
+         fecha: evento.timestamp,
+         tipo: 'sistema'
+      })
+    }
+
+    socket.value.on('user_joined', (evt) => {
+        console.log("🔔 Entró:", evt)
+        agregarMensajeSistema(evt)
+    })
+    
+    socket.value.on('user_left', (evt) => {
+        console.log("🚪 Salió:", evt)
+        agregarMensajeSistema(evt)
+    })
+
+    // US-04: Contador
+    socket.value.on('usuarios_online', (data) => {
+      console.log("👥 Online:", data.total)
+      connectedUsers.value = data.total
     })
   }
 
-  // Función para enviar un mensaje al servidor
+  // Función para decir "Hola, soy Juan"
+  const identificarse = () => {
+    if (!socket.value || !conectado.value) return
+
+    const usuarioReal = userStore.usuario
+    
+    const datosUsuario = {
+      id: usuarioReal?.id || 'anonimo',
+      email: usuarioReal?.email || 'Invitado',
+      nombre: usuarioReal?.nombre || 'Invitado'
+    }
+    
+    // Enviamos el evento al backend para que nos registre en el mapa
+    socket.value.emit('registrar_usuario', datosUsuario)
+  }
+
+  // Enviar mensaje
   const enviarMensaje = (texto) => {
-    // Verifica que haya conexión y que el texto no esté vacío
     if (socket.value && texto) {
-      // Prepara el objeto con los datos del mensaje
+      const usuarioReal = userStore.usuario
       const payload = {
         contenido: texto,
-        // Usa el ID real del usuario o 'anonimo' si no hay sesión
-        usuarioId: usuario.value?.id || 'anonimo',
-        email: usuario.value?.email || 'Anonimo'
+        usuarioId: usuarioReal?.id || 'anonimo',
+        email: usuarioReal?.email || 'Anonimo'
       }
-      // Emite el evento 'enviar_mensaje' al servidor
       socket.value.emit('enviar_mensaje', payload)
     }
   }
 
-  // --- AUTENTICACIÓN ---
+  // VIGILANTE: Si el usuario carga tarde, nos presentamos de nuevo
+  watch(() => userStore.usuario, () => {
+    if (conectado.value) {
+      identificarse()
+    }
+  })
 
-  // Inicia el proceso de login con Google
-  const loginGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ provider: 'google' })
-  }
-  
-  // Cierra la sesión y recarga la página para limpiar datos
-  const logout = async () => {
-    await supabase.auth.signOut()
-    window.location.reload()
-  }
-
-  // Retorna todas las variables y funciones para usarlas en los componentes
+  // NOTA: Login/Logout se manejan en user.js, aquí solo exportamos lo del chat
   return {
     messages,
-    usuario,
     conectado,
+    connectedUsers,
     iniciar,
     fetchMessages,
-    enviarMensaje,
-    loginGoogle,
-    logout
+    enviarMensaje
   }
 })
