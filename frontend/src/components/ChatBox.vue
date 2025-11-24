@@ -3,35 +3,48 @@ import { ref, nextTick, watch, onMounted } from 'vue'
 import { useChatStore } from '../stores/chat'
 import { useUserStore } from '../stores/user'
 
+// Inicializa los stores de Vuex/Pinia para acceder al estado global
 const chatStore = useChatStore()
 const userStore = useUserStore()
 
+// Variables reactivas para el contenido del input y la referencia del área de mensajes
 const texto = ref('')
 const fondoChat = ref(null)
 
+// Función para desplazar el scroll al final del área de mensajes
 const bajarScroll = () => {
   if (fondoChat.value) {
+    // Usa scrollTo con 'smooth' para una animación suave
     fondoChat.value.scrollTo({ top: fondoChat.value.scrollHeight, behavior: 'smooth' })
   }
 }
 
+// Observa el cambio en la longitud del array de mensajes
 watch(() => chatStore.messages.length, async () => {
+  // Espera a que Vue actualice el DOM después de añadir un mensaje
   await nextTick()
+  // Llama a la función de scroll para ver el mensaje nuevo
   bajarScroll()
 })
 
+// Ejecuta la función de scroll justo después de que el componente se monta
 onMounted(() => {
   bajarScroll()
 })
 
+// Función principal para enviar el mensaje
 const enviar = () => {
+  // Verifica que el input no esté vacío o solo contenga espacios en blanco
   if (texto.value.trim()) {
+    // Llama a la acción del store para enviar el mensaje a través del socket
     chatStore.enviarMensaje(texto.value)
+    // Limpia el input después de enviar
     texto.value = ''
   }
 }
 </script>
 
+// Template del componente ChatBox
 <template>
   <div class="chat-container">
     
@@ -124,7 +137,7 @@ const enviar = () => {
 .info-grupo { 
   display: flex; 
   align-items: center; 
-  gap: 12px; /* Espacio reducido */
+  gap: 12px;
 }
 
 .icono-grupo { 
@@ -154,17 +167,17 @@ const enviar = () => {
 
 .subtitulo-chat { 
   font-size: 0.9rem; 
-  color: #718096; /* Gris más legible */
+  color: #718096;
 }
 
-/* --- MENSAJES AREA --- */
+/* --- AREA MENSAJES --- */
 .mensajes-area { 
   flex: 1; 
-  padding: 20px 25px; /* Más padding horizontal */
+  padding: 20px 25px;
   overflow-y: auto; 
   display: flex; 
   flex-direction: column; 
-  gap: 8px; /* Espacio reducido entre mensajes */
+  gap: 8px;
 
   /* Fondo limpio, textura sutil */
   background-color: #fcfcfc; 
@@ -177,10 +190,10 @@ const enviar = () => {
   color: #a0aec0; 
   margin-top: 50px; 
   font-size: 1rem;
-  font-style: normal; /* No itálica, más limpio */
+  font-style: normal;
 }
 
-/* --- MENSAJES SISTEMA (Se elimina el CSS de aquí, se delega a MensajeSistema.vue) --- */
+/* --- MENSAJES SISTEMA --- */
 .mensaje-sistema { 
   display: flex; 
   justify-content: center; 
@@ -190,7 +203,7 @@ const enviar = () => {
 
 /* --- BURBUJAS DE MENSAJE --- */
 .mensaje-wrapper { 
-  max-width: 65%; /* Un poco más estrecho */
+  max-width: 65%;
   display: flex; 
   flex-direction: column; 
   position: relative;
@@ -198,7 +211,7 @@ const enviar = () => {
 
 .autor { 
   font-size: 0.8rem; 
-  color: #5472aa; /* Color del autor en azul */
+  color: #5472aa;
   font-weight: 600;
   margin-bottom: 2px; 
   margin-left: 5px; 
@@ -213,7 +226,7 @@ const enviar = () => {
   line-height: 1.4;
 }
 
-/* AJENO (OTROS) */
+/* AJENO (MENSAJE DE OTROS) */
 .mensaje-wrapper.ajeno { 
   align-self: flex-start; 
   align-items: flex-start; 
@@ -243,7 +256,6 @@ const enviar = () => {
 }
 
 .mensaje-wrapper.propio .burbuja { 
-  /* Verde claro y elegante (como un verde azulado) */
   background: #5a94ff; 
   color: #1a202c; 
   border-radius: 12px 0 12px 12px; 
@@ -264,15 +276,15 @@ const enviar = () => {
 .hora { 
   font-size: 0.7rem; 
   margin-left: 12px; 
-  color: rgba(0, 0, 0, 0.4); /* Gris oscuro y sutil */
+  color: rgba(0, 0, 0, 0.4);
   float: right; 
   margin-top: 6px; 
-  white-space: nowrap; /* Evita que la hora se rompa */
+  white-space: nowrap;
 }
 
 /* --- ÁREA DE ENTRADA --- */
 .input-area { 
-  padding: 12px 20px; /* Más padding */
+  padding: 12px 20px;
   border-top: 1px solid #e2e8f0; 
   display: flex; 
   gap: 10px; 
@@ -282,26 +294,25 @@ const enviar = () => {
 input { 
   flex: 1; 
   padding: 10px 15px; 
-  border-radius: 20px; /* Más redondeado */
-  border: 1px solid #cbd5e0; /* Borde sutil */
+  border-radius: 20px;
+  border: 1px solid #cbd5e0;
   outline: none; 
   font-size: 1rem; 
   transition: border-color 0.2s;
 }
 
 input:focus {
-  border-color: #4c5f7e; /* Borde azul al enfocarse */
+  border-color: #4c5f7e;
   box-shadow: 0 0 0 1px #5170a2;
 }
 
+/* --- BOTÓN ENVIAR --- */
 button { 
   padding: 0 20px; 
-
-  /* Azul corporativo */
   background: #3b82f6; 
   color: white; 
   border: none; 
-  border-radius: 20px; /* Redondeado igual al input */
+  border-radius: 20px;
   cursor: pointer; 
   font-weight: 600; 
   font-size: 1rem;
