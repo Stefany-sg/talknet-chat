@@ -1,100 +1,113 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { io } from 'socket.io-client'
-import { supabase } from '../supabase'
-import router from '@/router'
-import { useUserStore } from './user'
+import { useUserStore } from './user' // <--- 1. IMPORTAMOS AL EXPERTO EN USUARIOS
 
 export const useChatStore = defineStore('chat', () => {
+  const userStore = useUserStore() // Instancia del store de usuario
+
   // --- ESTADO ---
   const messages = ref([])
   const socket = ref(null)
   const conectado = ref(false)
-  // HU-4
-  const usersOnlineCount = ref(0) 
-  const usersOnlineList = ref([])
-
-  // 💡 COMPUTADO: Leer el usuario directamente del UserStore
-    const userStore = useUserStore()
-    const usuario = ref(userStore.usuario) // ⬅️ Usamos el usuario del userStore
+  const connectedUsers = ref(0) 
 
   // --- ACCIÓN PRINCIPAL: INICIAR ---
-  // Esta función orquesta todo al cargar la página
   const iniciar = async () => {
-        // 1. Auth: Ya está cargado en el userStore, solo leemos.
-        // Ya no necesitamos llamar a supabase.auth.getSession() ni onAuthStateChange aquí.
-        // 2. US-03: Cargar Historial
-        await fetchMessages()
-        // 3. US-02/04: Conectar Tiempo Real y Autenticar
-        conectarSocket(userStore.usuario) // Le pasamos la info del usuario desde el userStore
-    }
+    // YA NO cargamos usuario aquí. Confiamos en que userStore ya lo hizo.
+    
+    // 1. Cargar Historial
+    await fetchMessages()
 
-  // --- US-03: FETCH REST ---
+    // 2. Conectar Socket
+    conectarSocket()
+  }
+
+  // --- FETCH REST ---
   const fetchMessages = async () => {
     try {
-      // Conectamos al puerto 3001 donde vive tu backend
       const response = await fetch('http://localhost:3001/api/messages')
       if (!response.ok) throw new Error('Error al conectar API')
-      
       const data = await response.json()
-      messages.value = data // Llenamos el array con el historial antiguo
+      messages.value = data
       console.log("✅ Historial cargado:", data.length)
     } catch (error) {
       console.error("❌ Error fetch:", error)
     }
   }
 
-  // --- US-02: SOCKETS (TIEMPO REAL) ---
+  // --- SOCKETS (TIEMPO REAL) ---
   const conectarSocket = () => {
-    if (socket.value) return // Si ya existe, no reconectar
+    if (socket.value) return 
 
     socket.value = io('http://localhost:3001')
 
     socket.value.on('connect', () => {
       conectado.value = true
-      console.log("🟢 Socket Conectado (Listo para US-02)")
+      console.log("🟢 Socket Conectado")
+
+      // --- FIX US-04: ¡PRESENTARSE AL SERVIDOR! ---
+      // AHORA USAMOS LOS DATOS REALES DE userStore (Invitado o Google)
+      const usuarioReal = userStore.usuario
+
+      const datosUsuario = {
+        id: usuarioReal?.id || 'anonimo',
+        email: usuarioReal?.email || 'Invitado',
+        nombre: usuarioReal?.nombre || 'Invitado' // Ahora sí toma el nombre del invitado
+      }
+      
+      socket.value.emit('registrar_usuario', datosUsuario)
     })
 
-    // CRÍTICO: Escuchar cuando alguien (o yo mismo) envía un mensaje nuevo
+    // Escuchar mensajes normales
     socket.value.on('nuevo_mensaje', (msg) => {
-      messages.value.push(msg) // ¡Esto hace que aparezca al instante!
+      messages.value.push(msg)
+    })
+
+    // --- FIX US-04: ESCUCHAR EVENTOS DE SISTEMA ---
+    const manejarEventoSistema = (evento) => {
+      messages.value.push({
+         id: Date.now(),
+         contenido: evento.mensaje,
+         usuarioId: 'Sistema',
+         fecha: evento.timestamp,
+         tipo: 'sistema'
+      })
+    }
+
+    socket.value.on('user_joined', manejarEventoSistema)
+    socket.value.on('user_left', manejarEventoSistema)
+
+    // Actualizar contador
+    socket.value.on('usuarios_online', (data) => {
+      connectedUsers.value = data.total
     })
   }
 
-  // --- US-02: ENVIAR ---
   const enviarMensaje = (texto) => {
-    const userData = userStore.usuario
-    if (socket.value && texto && userData) {
+    if (socket.value && texto) {
+      const usuarioReal = userStore.usuario // Sacamos la info del userStore
+
       const payload = {
         contenido: texto,
-        usuarioId: userData.id || 'anonimo',
-        email: userData.email || 'Anonimo'
+        usuarioId: usuarioReal?.id || 'anonimo',
+        email: usuarioReal?.email || 'Anonimo'
       }
-      // Emitimos al backend para que lo guarde y retransmita
       socket.value.emit('enviar_mensaje', payload)
     }
   }
 
-  // --- AUTH ---
-  const loginGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ provider: 'google' })
-  }
-  
-  const logout = async () => {
-    await userStore.logout() // ⬅ Llamar al logout del userStore (limpia Supabase y localstorage)
-    router.push({ name: 'login' }) 
-  }
+  // NOTA: Borramos loginGoogle y logout de aquí.
+  // Esas funciones pertenecen exclusivamente a user.js
 
   return {
     messages,
-    usuario: userStore.usuario,
+    // usuario, <--- YA NO LO EXPORTAMOS (está en userStore)
     conectado,
+    connectedUsers,
     iniciar,
-    usersOnlineCount,
-    usersOnlineList,
     fetchMessages,
-    enviarMensaje,
-    loginGoogle,
-    logout
+    enviarMensaje
+    // login/logout <--- YA NO EXISTEN AQUÍ
   }
 })

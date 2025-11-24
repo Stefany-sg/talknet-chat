@@ -98,8 +98,8 @@ async function startServer() {
         conectadoEn: new Date().toISOString()
       });
 
-      console.log(`[US-04]  ${socket.data.nombreUsuario} se ha unido`);
-      console.log(`[US-04]  Total online: ${usuariosConectados.size}`);
+      console.log(`${socket.data.nombreUsuario} se ha unido`);
+      console.log(`Total online: ${usuariosConectados.size}`);
 
       // Emitir 'user_joined' a TODOS los clientes
       // Criterio: Mensaje tipo sistema "Usuario_123 se ha unido"
