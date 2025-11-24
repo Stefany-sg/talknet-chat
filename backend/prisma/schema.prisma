@@ -1,18 +1,20 @@
+// Configura el cliente de Prisma para usarlo en nuestro código JavaScript
 generator client {
   provider = "prisma-client-js"
 }
 
+// Define la conexión a la base de datos PostgreSQL usando el archivo .env
 datasource db {
   provider  = "postgresql"
-  // Descomenta esta línea para que lea del .env
   url       = env("DATABASE_URL")
-  // directUrl = env("DIRECT_URL") // Opcional, con la config de arriba no es estricto, pero puedes dejarlo.
+  // directUrl = env("DIRECT_URL") 
 }
 
+// Modelo de la tabla donde se guardarán los chats
 model Mensaje {
-  id        Int      @id @default(autoincrement())
+  id        Int      @id @default(autoincrement()) // ID único y automático
   contenido String
-  usuarioId String   
-  email     String?  
-  fecha     DateTime @default(now())
+  usuarioId String   // Identificador del usuario (Google o Invitado)
+  email     String?  // El signo '?' significa que este campo es opcional
+  fecha     DateTime @default(now()) // Guarda la fecha/hora actual por defecto
 }
